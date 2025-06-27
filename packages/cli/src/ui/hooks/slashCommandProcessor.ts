@@ -32,7 +32,7 @@ import { createShowMemoryAction } from './useShowMemoryCommand.js';
 import { GIT_COMMIT_INFO } from '../../generated/git-commit.js';
 import { formatDuration, formatMemoryUsage } from '../utils/formatters.js';
 import { getCliVersion } from '../../utils/version.js';
-import { LoadedSettings } from '../../config/settings.js';
+import { LoadedSettings, SettingScope } from '../../config/settings.js';
 
 export interface SlashCommandActionReturn {
   shouldScheduleTool?: boolean;
@@ -236,6 +236,40 @@ export const useSlashCommandProcessor = (
         description: 'change the theme',
         action: (_mainCommand, _subCommand, _args) => {
           openThemeDialog();
+        },
+      },
+      {
+        name: 'banner',
+        description: 'change the banner style (default, ollama)',
+        action: (_mainCommand, subCommand, _args) => {
+          const validStyles = ['default', 'ollama'];
+          
+          if (!subCommand) {
+            const currentStyle = settings.merged.bannerStyle || 'default';
+            addMessage({
+              type: MessageType.INFO,
+              content: `Current banner style: ${currentStyle}\nAvailable styles: ${validStyles.join(', ')}\nUsage: /banner <style>`,
+              timestamp: new Date(),
+            });
+            return;
+          }
+          
+          if (!validStyles.includes(subCommand)) {
+            addMessage({
+              type: MessageType.ERROR,
+              content: `Invalid banner style: ${subCommand}\nAvailable styles: ${validStyles.join(', ')}`,
+              timestamp: new Date(),
+            });
+            return;
+          }
+          
+          settings.setValue(SettingScope.User, 'bannerStyle', subCommand);
+          addMessage({
+            type: MessageType.INFO,
+            content: `Banner style changed to: ${subCommand}\nRestart the CLI to see the new banner.`,
+            timestamp: new Date(),
+          });
+          refreshStatic();
         },
       },
       {

@@ -69,6 +69,9 @@ export interface Settings {
   // UI setting. Does not display the ANSI-controlled terminal title.
   hideWindowTitle?: boolean;
 
+  // Banner style configuration
+  bannerStyle?: 'default' | 'ollama' | 'custom';
+
   // Ollama configuration settings
   ollama?: OllamaSettings;
 

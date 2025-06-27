@@ -602,7 +602,11 @@ const App = ({ config, settings, startupWarnings = [] }: AppProps) => {
           key={staticKey}
           items={[
             <Box flexDirection="column" key="header">
-              <Header terminalWidth={terminalWidth} />
+              <Header 
+                terminalWidth={terminalWidth} 
+                authType={settings.merged.selectedAuthType}
+                useAlternativeLogo={settings.merged.bannerStyle === 'ollama'}
+              />
               <Tips config={config} />
               {updateMessage && <UpdateNotification message={updateMessage} />}
             </Box>,

@@ -12,7 +12,6 @@ import {
   EmbedContentResponse,
   EmbedContentParameters,
   FinishReason,
-  Content,
 } from '@google/genai';
 import { ContentGenerator, ContentGeneratorConfig } from './contentGenerator.js';
 
@@ -38,7 +37,7 @@ export class OllamaContentGenerator implements ContentGenerator {
     const isJsonRequest = request.config?.responseMimeType === 'application/json';
     
     // Convert to Ollama format
-    let messages = this.convertToOllamaMessages(request);
+    const messages = this.convertToOllamaMessages(request);
     
     // If JSON output is requested, add instructions to the last user message
     if (isJsonRequest && messages.length > 0) {
@@ -118,11 +117,11 @@ export class OllamaContentGenerator implements ContentGenerator {
   }
 
   async generateContentStream(
-    request: GenerateContentParameters,
+    _request: GenerateContentParameters,
   ): Promise<AsyncGenerator<GenerateContentResponse>> {
     // For Ollama, we'll use non-streaming mode to get the complete response
     // and then yield it as a single clean result
-    const messages = this.convertToOllamaMessages(request);
+    const messages = this.convertToOllamaMessages(_request);
     const ollamaRequest = {
       model: this.model,
       messages,
@@ -203,22 +202,23 @@ export class OllamaContentGenerator implements ContentGenerator {
     return messages;
   }
 
-  private extractContentText(content: any): string {
+  private extractContentText(content: unknown): string {
     if (typeof content === 'string') {
       return content;
     }
     
-    if (content?.parts) {
-      return content.parts
-        .filter((part: any) => part.text)
-        .map((part: any) => part.text)
+    if (content && typeof content === 'object' && 'parts' in content) {
+      const parts = (content as { parts: unknown[] }).parts;
+      return parts
+        .filter((part: unknown) => part && typeof part === 'object' && 'text' in part)
+        .map((part: unknown) => (part as { text: string }).text)
         .join('');
     }
     
     return '';
   }
 
-  private async *handleNonStreamingResponse(ollamaResponse: any): AsyncGenerator<GenerateContentResponse> {
+  private async *handleNonStreamingResponse(ollamaResponse: { message?: { content?: string }; eval_count?: number; prompt_eval_count?: number }): AsyncGenerator<GenerateContentResponse> {
     let responseText = ollamaResponse.message?.content || '';
     
     // Clean thinking tokens and extract only the final answer
