@@ -1,8 +1,21 @@
-# Gemini CLI
+# Gemini CLI - Ollama Extension
 
 [![Gemini CLI CI](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml)
 
 ![Gemini CLI Screenshot](./docs/assets/gemini-screenshot.png)
+
+## 🦙 Ollama Extension Overview
+
+This is an **enhanced version** of the official Gemini CLI with **Ollama integration**, allowing you to run powerful language models locally on your machine. This extension provides all the capabilities of the original Gemini CLI while adding support for local AI inference through Ollama.
+
+### Key Features of the Ollama Extension:
+
+- 🔐 **Privacy-First**: Run AI models completely offline on your local machine
+- ⚡ **Performance**: Direct local inference without network latency
+- 🎯 **Model Flexibility**: Support for Llama, Mistral, Qwen, Gemma, and many other models
+- 🛠️ **Full Compatibility**: All original Gemini CLI features and tools work seamlessly
+- 🎨 **Custom Branding**: Distinctive Ollama-themed banners and interface
+- 🔄 **Easy Switching**: Switch between Ollama and Gemini models as needed
 
 This repository contains the Gemini CLI, a command-line AI workflow tool that connects to your
 tools, understands your code and accelerates your workflows.
@@ -51,6 +64,60 @@ If you need to use a specific model or require a higher request capacity, you ca
 
 For other authentication methods, including Google Workspace accounts, see the [authentication](./docs/cli/authentication.md) guide.
 
+## 🦙 Ollama Setup and Usage
+
+### Prerequisites for Ollama
+
+1. **Install Ollama**: Download and install Ollama from [ollama.ai](https://ollama.ai)
+2. **Pull a Model**: Download a language model (e.g., `ollama pull qwen2.5:7b` or `ollama pull llama3.1:8b`)
+3. **Start Ollama Server**: Run `ollama serve` to start the local server
+
+### Using the Ollama Extension
+
+1. **Install this Extension**:
+   ```bash
+   git clone <this-repository>
+   cd gemini-cli
+   npm install
+   npm run build
+   npm link
+   ```
+
+2. **Configure for Ollama**:
+   ```bash
+   export GEMINI_AUTH_TYPE=ollama
+   export OLLAMA_MODEL=qwen2.5:7b  # or your preferred model
+   export OLLAMA_BASE_URL=http://localhost:11434  # default Ollama URL
+   ```
+
+3. **Start the CLI**:
+   ```bash
+   gemini
+   ```
+
+You'll see the distinctive Ollama extension banner and can start using local AI models immediately!
+
+### Ollama-Specific Features
+
+- **Custom Banners**: The CLI automatically displays Ollama-themed ASCII art when using Ollama
+- **Banner Customization**: Use `/banner ollama` to switch between different banner styles
+- **Local Privacy**: All processing happens on your machine - no data sent to external servers
+- **Model Management**: Switch models by changing the `OLLAMA_MODEL` environment variable
+
+### Switching Between Ollama and Gemini
+
+You can easily switch between local Ollama models and Google's Gemini:
+
+```bash
+# Use Ollama (local)
+export GEMINI_AUTH_TYPE=ollama
+gemini
+
+# Use Gemini (cloud)
+unset GEMINI_AUTH_TYPE  # or set to 'oauth' or 'api_key'
+gemini
+```
+
 ## Examples
 
 Once the CLI is running, you can start interacting with Gemini from your shell.
@@ -74,8 +141,11 @@ gemini
 
 ### Next steps
 
+- **For Ollama users**: See [BUILD_AND_INSTALL.md](./BUILD_AND_INSTALL.md) for detailed installation instructions
+- **Quick setup**: Use the automated [install.sh](./install.sh) script for one-command installation
 - Learn how to [contribute to or build from the source](./CONTRIBUTING.md).
 - Explore the available **[CLI Commands](./docs/cli/commands.md)**.
+- Check out **[Banner Customization](./docs/cli/banner-customization.md)** for Ollama-specific UI options
 - If you encounter any issues, review the **[Troubleshooting guide](./docs/troubleshooting.md)**.
 - For more comprehensive documentation, see the [full documentation](./docs/index.md).
 - Take a look at some [popular tasks](#popular-tasks) for more inspiration.
@@ -84,6 +154,26 @@ gemini
 
 Head over to the [troubleshooting](docs/troubleshooting.md) guide if you're
 having issues.
+
+## 🔄 Ollama vs Gemini: When to Use Each
+
+### Use Ollama Extension When:
+- 🔐 **Privacy is critical**: Sensitive code or data that shouldn't leave your machine
+- 🌐 **Offline work**: No internet connection or unreliable connectivity
+- ⚡ **Low latency needed**: Real-time applications requiring instant responses
+- 💰 **Cost optimization**: Avoid API usage costs for high-volume tasks
+- 🎯 **Specific models**: Need access to particular open-source models
+
+### Use Gemini (Cloud) When:
+- 🧠 **Maximum capability**: Need the most advanced reasoning and multimodal features
+- 📊 **Large context**: Working with very large codebases (1M+ tokens)
+- 🔍 **Web grounding**: Need real-time web search integration
+- 🚀 **Latest features**: Want access to cutting-edge Gemini capabilities
+
+### Version Information
+- **Extension Version**: v0.1.5
+- **Base Gemini CLI**: Compatible with latest official release
+- **Unique Features**: Ollama integration, custom banners, local AI support
 
 ## Popular tasks
 

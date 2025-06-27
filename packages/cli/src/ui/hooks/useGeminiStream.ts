@@ -318,6 +318,7 @@ export const useGeminiStream = (
         setPendingHistoryItem({ type: 'gemini', text: '' });
         newGeminiMessageBuffer = eventValue;
       }
+
       // Split large messages for better rendering performance. Ideally,
       // we should maximize the amount of output sent to <Static />.
       const splitPoint = findLastSafeSplitPoint(newGeminiMessageBuffer);
@@ -339,20 +340,14 @@ export const useGeminiStream = (
         const beforeText = newGeminiMessageBuffer.substring(0, splitPoint);
         const afterText = newGeminiMessageBuffer.substring(splitPoint);
         addItem(
-          {
-            type: pendingHistoryItemRef.current?.type as
-              | 'gemini'
-              | 'gemini_content',
-            text: beforeText,
-          },
+          { type: 'gemini_content', text: beforeText },
           userMessageTimestamp,
         );
-        setPendingHistoryItem({ type: 'gemini_content', text: afterText });
-        newGeminiMessageBuffer = afterText;
+        setPendingHistoryItem({ type: 'gemini', text: afterText });
       }
       return newGeminiMessageBuffer;
     },
-    [addItem, pendingHistoryItemRef, setPendingHistoryItem],
+    [addItem, setPendingHistoryItem],
   );
 
   const handleUserCancelledEvent = useCallback(

@@ -35,5 +35,10 @@ export const validateAuthMethod = (authMethod: string): string | null => {
     return null;
   }
 
+  if (authMethod === AuthType.OLLAMA) {
+    // Ollama is optional - if no OLLAMA_BASE_URL is set, we'll use default localhost:11434
+    return null;
+  }
+
   return 'Invalid auth method selected.';
 };
