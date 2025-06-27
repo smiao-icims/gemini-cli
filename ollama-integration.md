@@ -48,6 +48,219 @@ The integration will be performed in the following steps:
 
 This plan ensures a modular and low-risk integration of Ollama into the Gemini CLI.
 
+## Coding Style and Patterns
+
+To ensure the Ollama integration maintains consistency with the existing codebase and facilitates a smooth PR review, the following coding patterns and styles must be strictly followed:
+
+### 1. License Headers
+
+**Pattern**: Every TypeScript file must begin with the standard Google license header:
+
+```typescript
+/**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+```
+
+### 2. Enum Definitions
+
+**Pattern**: Enums use string values with descriptive kebab-case naming:
+
+```typescript
+export enum AuthType {
+  LOGIN_WITH_GOOGLE_PERSONAL = 'oauth-personal',
+  USE_GEMINI = 'gemini-api-key',
+  USE_VERTEX_AI = 'vertex-ai',
+  OLLAMA = 'ollama',  // Follow this exact pattern
+}
+```
+
+### 3. Configuration Validation Pattern
+
+**Pattern**: The `validateAuthMethod` function in `packages/cli/src/config/auth.ts` follows a specific structure:
+
+```typescript
+export const validateAuthMethod = (authMethod: string): string | null => {
+  loadEnvironment();
+  
+  if (authMethod === AuthType.OLLAMA) {
+    // Check required environment variables or settings
+    if (!process.env.OLLAMA_BASE_URL && !defaultOllamaUrl) {
+      return 'OLLAMA_BASE_URL environment variable not found. Add that to your .env and try again, no reload needed!';
+    }
+    return null;
+  }
+  
+  // ... existing validations ...
+  
+  return 'Invalid auth method selected.';
+};
+```
+
+**Key Requirements**:
+- Return `null` for valid configurations
+- Return descriptive error strings for invalid configurations
+- Follow the exact error message format with "Add that to your .env and try again, no reload needed!"
+- Call `loadEnvironment()` at the beginning
+
+### 4. Configuration Factory Pattern
+
+**Pattern**: The `createContentGeneratorConfig` function follows a specific structure:
+
+```typescript
+export async function createContentGeneratorConfig(
+  model: string | undefined,
+  authType: AuthType | undefined,
+  config?: { getModel?: () => string },
+): Promise<ContentGeneratorConfig> {
+  // Environment variable extraction
+  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL;
+  const ollamaModel = process.env.OLLAMA_MODEL;
+  
+  // ... existing code ...
+  
+  if (authType === AuthType.OLLAMA && ollamaBaseUrl) {
+    contentGeneratorConfig.baseUrl = ollamaBaseUrl;
+    contentGeneratorConfig.model = ollamaModel || effectiveModel;
+    return contentGeneratorConfig;
+  }
+  
+  return contentGeneratorConfig;
+}
+```
+
+### 5. Factory Function Pattern
+
+**Pattern**: The `createContentGenerator` function uses a switch-like if-else structure:
+
+```typescript
+export async function createContentGenerator(
+  config: ContentGeneratorConfig,
+): Promise<ContentGenerator> {
+  const version = process.env.CLI_VERSION || process.version;
+  const httpOptions = {
+    headers: {
+      'User-Agent': `GeminiCLI/${version} (${process.platform}; ${process.arch})`,
+    },
+  };
+  
+  if (config.authType === AuthType.OLLAMA) {
+    return new OllamaContentGenerator(config, httpOptions);
+  }
+  
+  // ... existing conditions ...
+  
+  throw new Error(
+    `Error creating contentGenerator: Unsupported authType: ${config.authType}`,
+  );
+}
+```
+
+### 6. UI Component Pattern
+
+**Pattern**: The `AuthDialog` component uses a specific items array structure:
+
+```typescript
+const items = [
+  {
+    label: 'Login with Google',
+    value: AuthType.LOGIN_WITH_GOOGLE_PERSONAL,
+  },
+  { label: 'Gemini API Key', value: AuthType.USE_GEMINI },
+  { label: 'Vertex AI', value: AuthType.USE_VERTEX_AI },
+  { label: 'Ollama (Local)', value: AuthType.OLLAMA },  // Follow this pattern
+];
+```
+
+### 7. Interface and Type Definitions
+
+**Pattern**: Configuration interfaces use optional properties with descriptive names:
+
+```typescript
+export type ContentGeneratorConfig = {
+  model: string;
+  apiKey?: string;
+  vertexai?: boolean;
+  baseUrl?: string;  // Add new properties as optional
+  authType?: AuthType | undefined;
+};
+```
+
+### 8. Error Handling Pattern
+
+**Pattern**: Use descriptive error messages with consistent formatting:
+
+```typescript
+throw new Error(
+  `Error creating contentGenerator: Unsupported authType: ${config.authType}`,
+);
+```
+
+### 9. Import Statements
+
+**Pattern**: Use relative imports with `.js` extensions for local files:
+
+```typescript
+import { AuthType } from '@google/gemini-cli-core';
+import { loadEnvironment } from './config.js';
+```
+
+### 10. Settings Interface Pattern
+
+**Pattern**: Settings are added to the `Settings` interface with optional properties:
+
+```typescript
+export interface Settings {
+  // ... existing properties ...
+  ollama?: {
+    model?: string;
+    baseUrl?: string;
+  };
+}
+```
+
+### 11. Conditional Logic Pattern
+
+**Pattern**: Use explicit comparisons and maintain readability:
+
+```typescript
+if (authType === AuthType.OLLAMA && ollamaBaseUrl) {
+  // Implementation
+  return contentGeneratorConfig;
+}
+```
+
+### 12. Documentation Comments
+
+**Pattern**: Use JSDoc-style comments for interfaces and complex functions:
+
+```typescript
+/**
+ * Interface abstracting the core functionalities for generating content and counting tokens.
+ */
+export interface ContentGenerator {
+  // ...
+}
+```
+
+### Implementation Checklist
+
+When implementing Ollama support, ensure:
+
+- [ ] All new files include the Google license header
+- [ ] AuthType enum follows the string value pattern
+- [ ] Validation function returns null for success, string for errors
+- [ ] Configuration factory follows the existing pattern
+- [ ] UI components use the established items array structure
+- [ ] Error messages are descriptive and consistent
+- [ ] Import statements use relative paths with .js extensions
+- [ ] All new properties are optional in interfaces
+- [ ] Code follows the existing indentation and formatting
+
+Following these patterns ensures the code integrates seamlessly with the existing codebase and maintains the project's coding standards.
+
 ### Feature Gap Analysis: Gemini API vs. Ollama
 
 While integrating Ollama is feasible, it's important to understand the feature differences that will arise. The Gemini API is a mature, cloud-hosted service, whereas Ollama provides access to a diverse range of open-source models that are typically self-hosted.
@@ -78,4 +291,106 @@ Using MCP servers is a key architectural feature that significantly mitigates th
     2.  It registers these tools in its internal `ToolRegistry` alongside built-in tools.
     3.  It presents the *entire list* of available tools to the LLM.
     4.  When the LLM requests a tool call, the CLI routes the request either to its internal implementation or to the appropriate MCP server.
-*   **Conclusion**: MCP support itself is not impacted by the switch to Ollama. The only dependency is on the chosen Ollama model's ability to reliably generate a valid tool call request based on the provided tool descriptions. As long as the model is proficient at function calling, the complex tool logic remains safely encapsulated within the MCP server, and the system will function as expected. There is no specific version of the Ollama server that enables MCP; rather, it depends on the capabilities of the LLM being served. 
+*   **Conclusion**: MCP support itself is not impacted by the switch to Ollama. The only dependency is on the chosen Ollama model's ability to reliably generate a valid tool call request based on the provided tool descriptions. As long as the model is proficient at function calling, the complex tool logic remains safely encapsulated within the MCP server, and the system will function as expected. There is no specific version of the Ollama server that enables MCP; rather, it depends on the capabilities of the LLM being served.
+
+## Lessons Learned from Initial Implementation Attempts
+
+During our first attempts to integrate Ollama support, we encountered several significant challenges that provided valuable insights for future development. These lessons should be carefully considered in any subsequent implementation effort.
+
+### 1. Environment Stability is Critical
+
+**Challenge**: The build environment repeatedly reverted from Node.js v20 (required) to v23 (unsupported), causing numerous compilation and dependency errors that were difficult to diagnose.
+
+**Impact**: This instability led to confusing error messages, wasted debugging time, and made it difficult to distinguish between real code issues and environment problems.
+
+**Lesson**: Always ensure Node.js version consistency before making any code changes:
+- Run `nvm use 20` before every build or run command
+- Consider adding a `.nvmrc` file to lock the Node.js version for the project
+- When debugging build failures, verify the Node.js version first before investigating code issues
+
+### 2. Understanding the Interactive vs Non-Interactive Mode Difference
+
+**Challenge**: The Ollama integration worked perfectly in non-interactive mode (`npm start -- -p "prompt"`) but failed with "Method not implemented" errors in interactive mode.
+
+**Root Cause**: The issue was not with the hierarchical memory loading (as initially suspected) but with the chat history compression feature (`tryCompressChat` function). This function:
+- Only triggers during continuous, interactive conversations
+- Attempts to generate embeddings to summarize chat history for token management
+- Is never called in single-turn, non-interactive mode
+
+**Lesson**: When debugging mode-specific issues:
+- Identify the key differences between the modes' execution paths
+- Focus on features that are only active in one mode (like chat compression)
+- Don't assume the obvious suspect (like memory loading) is the culprit
+
+### 3. Complete Feature Integration Requires UI Updates
+
+**Challenge**: We correctly implemented backend configuration support for Ollama but initially overlooked updating the user-facing authentication selection UI.
+
+**Impact**: Users could configure Ollama via `settings.json` but couldn't select it through the interactive `/auth` command.
+
+**Lesson**: Feature integration must be comprehensive:
+- Backend configuration changes (settings, enums, factory functions)
+- UI updates (dialogs, menus, command processors)
+- Documentation updates
+- Test coverage for both backend and frontend components
+
+### 4. Maintain Code Integrity and Minimize Changes
+
+**Challenge**: Our debugging process led us down incorrect paths, temporarily disabling features (hierarchical memory) that should have remained functional.
+
+**Impact**: This violated the principle of minimal changes and could have broken existing functionality for other authentication types.
+
+**Lesson**: When integrating new features:
+- Make targeted, surgical changes rather than broad modifications
+- Preserve existing functionality for other authentication types
+- Use feature flags or conditional logic rather than disabling features entirely
+- Test that existing functionality remains intact after changes
+
+### 5. Tool Reliability and Manual Verification
+
+**Challenge**: Automated code editing tools frequently introduced unrelated bugs, particularly in complex files like `client.ts`, making targeted fixes much more difficult.
+
+**Impact**: Simple changes became complex debugging sessions due to tool-introduced errors in unrelated code sections.
+
+**Lesson**: When working with complex, critical files:
+- Make smaller, more focused edits
+- Manually verify each change before proceeding
+- Consider providing complete file replacements for complex modifications
+- Always test builds after each significant change
+- Have a rollback strategy ready when tools misbehave
+
+### 6. Systematic Debugging Approach
+
+**Challenge**: We initially made assumptions about the root cause (hierarchical memory) without systematically analyzing the differences between working and non-working scenarios.
+
+**Impact**: This led to unnecessary code changes and delayed finding the actual issue.
+
+**Lesson**: Follow a systematic debugging approach:
+- Identify exactly what works vs. what doesn't
+- Map out the execution differences between scenarios
+- Test hypotheses with minimal, reversible changes
+- Document findings to avoid repeating failed approaches
+
+### 7. The Importance of Clean Slate Restarts
+
+**Challenge**: As issues accumulated and the codebase became increasingly modified with debugging attempts, it became difficult to distinguish between real issues and artifacts from previous attempts.
+
+**Impact**: Progress slowed significantly as we debugged problems we had inadvertently created.
+
+**Lesson**: When debugging becomes complex:
+- Don't hesitate to reset to a clean state (`git reset --hard HEAD`)
+- Start over with lessons learned rather than trying to fix a compromised state
+- Document the approach before implementing to avoid repeated mistakes
+
+### Recommended Implementation Strategy
+
+Based on these lessons, future implementation attempts should:
+
+1. **Establish Environment Stability**: Lock Node.js version and verify before starting
+2. **Implement Incrementally**: Make one targeted change at a time with verification
+3. **Focus on the Real Issue**: Implement proper Ollama support in `tryCompressChat` rather than disabling features
+4. **Plan Comprehensively**: Include all UI components in the implementation plan
+5. **Test Continuously**: Verify both interactive and non-interactive modes after each change
+6. **Maintain Rollback Capability**: Keep the ability to quickly return to a clean state
+
+These lessons significantly improve the likelihood of a successful, clean integration on the next attempt. 
