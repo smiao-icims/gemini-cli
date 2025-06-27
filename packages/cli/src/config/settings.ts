@@ -35,6 +35,11 @@ export interface AccessibilitySettings {
   disableLoadingPhrases?: boolean;
 }
 
+export interface OllamaSettings {
+  model?: string;
+  baseUrl?: string;
+}
+
 export interface Settings {
   theme?: string;
   selectedAuthType?: AuthType;
@@ -63,6 +68,9 @@ export interface Settings {
 
   // UI setting. Does not display the ANSI-controlled terminal title.
   hideWindowTitle?: boolean;
+
+  // Ollama configuration settings
+  ollama?: OllamaSettings;
 
   // Add other settings here.
 }

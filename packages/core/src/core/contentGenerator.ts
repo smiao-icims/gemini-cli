@@ -16,6 +16,7 @@ import {
 import { createCodeAssistContentGenerator } from '../code_assist/codeAssist.js';
 import { DEFAULT_GEMINI_MODEL } from '../config/models.js';
 import { getEffectiveModel } from './modelCheck.js';
+import { OllamaContentGenerator } from './ollamaContentGenerator.js';
 
 /**
  * Interface abstracting the core functionalities for generating content and counting tokens.
@@ -38,24 +39,31 @@ export enum AuthType {
   LOGIN_WITH_GOOGLE_PERSONAL = 'oauth-personal',
   USE_GEMINI = 'gemini-api-key',
   USE_VERTEX_AI = 'vertex-ai',
+  OLLAMA = 'ollama',
 }
 
 export type ContentGeneratorConfig = {
   model: string;
   apiKey?: string;
   vertexai?: boolean;
+  baseUrl?: string;
   authType?: AuthType | undefined;
 };
 
 export async function createContentGeneratorConfig(
   model: string | undefined,
   authType: AuthType | undefined,
-  config?: { getModel?: () => string },
+  config?: { 
+    getModel?: () => string;
+    getOllama?: () => { model?: string; baseUrl?: string } | undefined;
+  },
 ): Promise<ContentGeneratorConfig> {
   const geminiApiKey = process.env.GEMINI_API_KEY;
   const googleApiKey = process.env.GOOGLE_API_KEY;
   const googleCloudProject = process.env.GOOGLE_CLOUD_PROJECT;
   const googleCloudLocation = process.env.GOOGLE_CLOUD_LOCATION;
+  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL;
+  const ollamaModel = process.env.OLLAMA_MODEL;
 
   // Use runtime model from config if available, otherwise fallback to parameter or default
   const effectiveModel = config?.getModel?.() || model || DEFAULT_GEMINI_MODEL;
@@ -97,6 +105,19 @@ export async function createContentGeneratorConfig(
     return contentGeneratorConfig;
   }
 
+  if (authType === AuthType.OLLAMA) {
+    const ollamaSettings = config?.getOllama?.();
+    contentGeneratorConfig.baseUrl = 
+      ollamaBaseUrl || 
+      ollamaSettings?.baseUrl || 
+      'http://localhost:11434';
+    contentGeneratorConfig.model = 
+      ollamaModel || 
+      ollamaSettings?.model || 
+      'qwen3:1.7b';
+    return contentGeneratorConfig;
+  }
+
   return contentGeneratorConfig;
 }
 
@@ -111,6 +132,10 @@ export async function createContentGenerator(
   };
   if (config.authType === AuthType.LOGIN_WITH_GOOGLE_PERSONAL) {
     return createCodeAssistContentGenerator(httpOptions, config.authType);
+  }
+
+  if (config.authType === AuthType.OLLAMA) {
+    return new OllamaContentGenerator(config, httpOptions);
   }
 
   if (
