@@ -297,6 +297,43 @@ export const useGeminiStream = (
 
   // --- Stream Event Handlers ---
 
+  /**
+   * Determines if we should end the response early for Ollama to improve performance.
+   * We end early when the response appears to be a complete answer that doesn't require continuation.
+   */
+  const shouldEndOllamaResponseEarly = useCallback((responseText: string): boolean => {
+    // Check if we're using Ollama
+    const authType = config.getContentGeneratorConfig()?.authType;
+    if (authType !== 'ollama') {
+      return false;
+    }
+
+    if (!responseText || responseText.length < 10) {
+      return false;
+    }
+
+    // Skip next speaker check if the response:
+    // 1. Ends with punctuation (indicating a complete thought)
+    // 2. Doesn't end with phrases that suggest continuation
+    // 3. Doesn't explicitly state the model will do something next
+    const endsWithPunctuation = /[.!?](\s|$)/.test(responseText);
+    const hasQuestionToUser = /\?\s*$/.test(responseText);
+    const indicatesContinuation = /\b(let me|I'll|I will|next I|then I|I should|I can help|I need to|I'm going to|I plan to|I want to)\b/i.test(responseText);
+    const hasToolCallIndicators = /\b(I'll use|I'll call|I'll run|I'll execute|let me use|let me call|let me run)\b/i.test(responseText);
+
+    const shouldEnd = endsWithPunctuation && 
+                      !hasQuestionToUser && 
+                      !indicatesContinuation && 
+                      !hasToolCallIndicators;
+
+    if (shouldEnd) {
+      // Force immediate response completion for Ollama
+      setTimeout(() => setIsResponding(false), 0);
+    }
+
+    return shouldEnd;
+  }, [config]);
+
   const handleContentEvent = useCallback(
     (
       eventValue: ContentEvent['value'],
@@ -318,6 +355,12 @@ export const useGeminiStream = (
         setPendingHistoryItem({ type: 'gemini', text: '' });
         newGeminiMessageBuffer = eventValue;
       }
+
+      // Check if Ollama response is complete and can end early
+      if (newGeminiMessageBuffer.length > 50) {
+        shouldEndOllamaResponseEarly(newGeminiMessageBuffer);
+      }
+
       // Split large messages for better rendering performance. Ideally,
       // we should maximize the amount of output sent to <Static />.
       const splitPoint = findLastSafeSplitPoint(newGeminiMessageBuffer);
@@ -339,20 +382,14 @@ export const useGeminiStream = (
         const beforeText = newGeminiMessageBuffer.substring(0, splitPoint);
         const afterText = newGeminiMessageBuffer.substring(splitPoint);
         addItem(
-          {
-            type: pendingHistoryItemRef.current?.type as
-              | 'gemini'
-              | 'gemini_content',
-            text: beforeText,
-          },
+          { type: 'gemini_content', text: beforeText },
           userMessageTimestamp,
         );
-        setPendingHistoryItem({ type: 'gemini_content', text: afterText });
-        newGeminiMessageBuffer = afterText;
+        setPendingHistoryItem({ type: 'gemini', text: afterText });
       }
       return newGeminiMessageBuffer;
     },
-    [addItem, pendingHistoryItemRef, setPendingHistoryItem],
+    [addItem, setPendingHistoryItem, shouldEndOllamaResponseEarly],
   );
 
   const handleUserCancelledEvent = useCallback(
@@ -567,6 +604,7 @@ export const useGeminiStream = (
       startNewTurn,
       onAuthError,
       config,
+      shouldEndOllamaResponseEarly,
     ],
   );
 

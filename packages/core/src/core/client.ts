@@ -233,16 +233,24 @@ export class GeminiClient {
       yield event;
     }
     if (!turn.pendingToolCalls.length && signal && !signal.aborted) {
-      const nextSpeakerCheck = await checkNextSpeaker(
-        this.getChat(),
-        this,
-        signal,
-      );
-      if (nextSpeakerCheck?.next_speaker === 'model') {
-        const nextRequest = [{ text: 'Please continue.' }];
-        // This recursive call's events will be yielded out, but the final
-        // turn object will be from the top-level call.
-        yield* this.sendMessageStream(nextRequest, signal, turns - 1);
+      // For Ollama, we can optimize by skipping next speaker check in most cases
+      // since it's slower and the responses are typically complete
+      const authType = this.config.getContentGeneratorConfig()?.authType;
+      const shouldSkipNextSpeakerCheck = 
+        authType === AuthType.OLLAMA && this.shouldSkipNextSpeakerCheckForOllama(turn);
+      
+      if (!shouldSkipNextSpeakerCheck) {
+        const nextSpeakerCheck = await checkNextSpeaker(
+          this.getChat(),
+          this,
+          signal,
+        );
+        if (nextSpeakerCheck?.next_speaker === 'model') {
+          const nextRequest = [{ text: 'Please continue.' }];
+          // This recursive call's events will be yielded out, but the final
+          // turn object will be from the top-level call.
+          yield* this.sendMessageStream(nextRequest, signal, turns - 1);
+        }
       }
     }
     return turn;
@@ -532,5 +540,49 @@ export class GeminiClient {
     }
 
     return null;
+  }
+
+  /**
+   * Determines if we should skip the next speaker check for Ollama to improve performance.
+   * We skip it when the response appears to be a complete answer that doesn't require continuation.
+   */
+  private shouldSkipNextSpeakerCheckForOllama(turn: Turn): boolean {
+    const responses = turn.getDebugResponses();
+    if (responses.length === 0) return false;
+    
+    // Get the last response text
+    const lastResponse = responses[responses.length - 1];
+    const responseText = getResponseText(lastResponse);
+    
+    if (!responseText) return false;
+    
+    const trimmedText = responseText.trim();
+    
+    // For Ollama, we can be more aggressive about skipping next speaker check
+    // since the responses are typically complete and self-contained
+    
+    // Skip if response is very short (like single numbers, words)
+    if (trimmedText.length <= 10) {
+      return true;
+    }
+    
+    // Skip if it ends with punctuation or appears to be a complete statement
+    const endsWithPunctuation = /[.!?]$/.test(trimmedText);
+    const endsWithNumber = /\d$/.test(trimmedText);
+    const endsWithWord = /[a-zA-Z]$/.test(trimmedText);
+    
+    // Check for indicators that suggest the response is incomplete or needs continuation
+    const hasQuestionToUser = /\?[^?]*$/.test(trimmedText);
+    const indicatesContinuation = /\b(next|then|now|moving on|i will|i'll|let me|I'll|I will|I need to|I should|I can help)\b/i.test(trimmedText);
+    const hasToolCallIndicators = /\b(I'll use|I'll call|I'll run|I'll execute|let me use|let me call|let me run)\b/i.test(trimmedText);
+    
+    // Skip next speaker check if:
+    // 1. Response appears complete (ends with punctuation, number, or word)
+    // 2. Doesn't indicate continuation or tool usage
+    // 3. Doesn't end with a question to the user
+    const appearsComplete = endsWithPunctuation || endsWithNumber || endsWithWord;
+    const needsContinuation = hasQuestionToUser || indicatesContinuation || hasToolCallIndicators;
+    
+    return appearsComplete && !needsContinuation;
   }
 }

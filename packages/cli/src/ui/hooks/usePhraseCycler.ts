@@ -179,12 +179,13 @@ export const usePhraseCycler = (isActive: boolean, isWaiting: boolean) => {
         setCurrentLoadingPhrase(WITTY_LOADING_PHRASES[randomIndex]);
       }, PHRASE_CHANGE_INTERVAL_MS);
     } else {
-      // Idle or other states, clear the phrase interval
+      // Idle or other states, clear the phrase interval immediately
       // and reset to the first phrase for next active state.
       if (phraseIntervalRef.current) {
         clearInterval(phraseIntervalRef.current);
         phraseIntervalRef.current = null;
       }
+      // Force immediate update to first phrase when becoming inactive
       setCurrentLoadingPhrase(WITTY_LOADING_PHRASES[0]);
     }
 
