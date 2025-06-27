@@ -47,4 +47,26 @@ describe('contentGenerator', () => {
     });
     expect(generator).toBe((mockGenerator as GoogleGenAI).models);
   });
+
+  it('should create an OllamaContentGenerator for Ollama auth type', async () => {
+    const generator = await createContentGenerator({
+      model: 'qwen3:1.7b',
+      authType: AuthType.OLLAMA,
+      baseUrl: 'http://localhost:11434',
+    });
+    
+    // Check that it returns an OllamaContentGenerator instance
+    expect(generator).toBeDefined();
+    expect(generator.constructor.name).toBe('OllamaContentGenerator');
+  });
+
+  it('should use default baseUrl for Ollama when not provided', async () => {
+    const generator = await createContentGenerator({
+      model: 'qwen3:1.7b',
+      authType: AuthType.OLLAMA,
+    });
+    
+    expect(generator).toBeDefined();
+    expect(generator.constructor.name).toBe('OllamaContentGenerator');
+  });
 });

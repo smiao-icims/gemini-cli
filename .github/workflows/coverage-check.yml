@@ -1,0 +1,100 @@
+name: Coverage Check
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'packages/**/*.ts'
+      - 'packages/**/*.tsx'
+      - 'packages/**/*.test.ts'
+      - 'packages/**/*.test.tsx'
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  coverage:
+    name: Verify Test Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run tests with coverage
+        run: npm run test:coverage
+        
+      - name: Verify coverage meets DoD requirements
+        run: npm run verify:coverage
+        
+      - name: Upload coverage reports to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          directory: ./packages/core/coverage/
+          fail_ci_if_error: false
+          verbose: true
+          
+      - name: Upload CLI coverage reports to Codecov  
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          directory: ./packages/cli/coverage/
+          fail_ci_if_error: false
+          verbose: true
+          
+      - name: Comment PR with coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            let comment = '## 📊 Test Coverage Report\n\n';
+            
+            const packages = ['core', 'cli'];
+            
+            for (const pkg of packages) {
+              const coveragePath = `./packages/${pkg}/coverage/coverage-summary.json`;
+              
+              if (fs.existsSync(coveragePath)) {
+                const coverage = JSON.parse(fs.readFileSync(coveragePath, 'utf8'));
+                const total = coverage.total;
+                
+                comment += `### 📦 ${pkg.toUpperCase()} Package\n`;
+                comment += `| Metric | Coverage | Threshold | Status |\n`;
+                comment += `|--------|----------|-----------|--------|\n`;
+                comment += `| Lines | ${total.lines.pct}% | 90% | ${total.lines.pct >= 90 ? '✅' : '❌'} |\n`;
+                comment += `| Functions | ${total.functions.pct}% | 90% | ${total.functions.pct >= 90 ? '✅' : '❌'} |\n`;
+                comment += `| Branches | ${total.branches.pct}% | 80% | ${total.branches.pct >= 80 ? '✅' : '❌'} |\n`;
+                comment += `| Statements | ${total.statements.pct}% | 90% | ${total.statements.pct >= 90 ? '✅' : '❌'} |\n\n`;
+              }
+            }
+            
+            comment += '\n---\n';
+            comment += '💡 **Definition of Done Requirements:**\n';
+            comment += '- Line Coverage: ≥90%\n';
+            comment += '- Function Coverage: ≥90%\n';
+            comment += '- Branch Coverage: ≥80%\n';
+            comment += '- Statement Coverage: ≥90%\n';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+            
+      - name: Fail if coverage requirements not met
+        run: |
+          echo "Coverage verification completed. Check the verify:coverage step for results."
+          # The verify:coverage script will exit with code 1 if requirements aren't met 

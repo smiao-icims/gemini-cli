@@ -403,4 +403,190 @@ describe('Gemini Client (client.ts)', () => {
       expect(finalResult).toBeInstanceOf(Turn);
     });
   });
+
+  describe('shouldSkipNextSpeakerCheckForOllama', () => {
+    beforeEach(async () => {
+      // Set up client with Ollama auth type
+      const mockToolRegistry = {
+        getFunctionDeclarations: vi.fn().mockReturnValue([]),
+        getTool: vi.fn().mockReturnValue(null),
+      };
+      const fileService = new FileDiscoveryService('/test/dir');
+      const MockedConfig = vi.mocked(Config, true);
+      const contentGeneratorConfig = {
+        model: 'test-model',
+        apiKey: 'test-key',
+        vertexai: false,
+        authType: AuthType.OLLAMA,
+      };
+      MockedConfig.mockImplementation(() => {
+        const mock = {
+          getContentGeneratorConfig: vi
+            .fn()
+            .mockReturnValue(contentGeneratorConfig),
+          getToolRegistry: vi.fn().mockResolvedValue(mockToolRegistry),
+          getModel: vi.fn().mockReturnValue('test-model'),
+          getEmbeddingModel: vi.fn().mockReturnValue('test-embedding-model'),
+          getApiKey: vi.fn().mockReturnValue('test-key'),
+          getVertexAI: vi.fn().mockReturnValue(false),
+          getUserAgent: vi.fn().mockReturnValue('test-agent'),
+          getUserMemory: vi.fn().mockReturnValue(''),
+          getFullContext: vi.fn().mockReturnValue(false),
+          getSessionId: vi.fn().mockReturnValue('test-session-id'),
+          getProxy: vi.fn().mockReturnValue(undefined),
+          getWorkingDir: vi.fn().mockReturnValue('/test/dir'),
+          getFileService: vi.fn().mockReturnValue(fileService),
+        };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return mock as any;
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mockConfig = new Config({} as any);
+      client = new GeminiClient(mockConfig);
+      await client.initialize(contentGeneratorConfig);
+    });
+
+    it('should return true for short responses (≤10 characters)', () => {
+      const mockTurn = {
+        getDebugResponses: vi.fn().mockReturnValue([
+          {
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: '42' }],
+                },
+              },
+            ],
+          },
+        ]),
+      };
+
+      const result = (client as any).shouldSkipNextSpeakerCheckForOllama(mockTurn);
+      expect(result).toBe(true);
+    });
+
+    it('should return true for responses ending with numbers', () => {
+      const mockTurn = {
+        getDebugResponses: vi.fn().mockReturnValue([
+          {
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: 'The answer is 42' }],
+                },
+              },
+            ],
+          },
+        ]),
+      };
+
+      const result = (client as any).shouldSkipNextSpeakerCheckForOllama(mockTurn);
+      expect(result).toBe(true);
+    });
+
+    it('should return true for responses ending with punctuation', () => {
+      const mockTurn = {
+        getDebugResponses: vi.fn().mockReturnValue([
+          {
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: 'This is a complete sentence.' }],
+                },
+              },
+            ],
+          },
+        ]),
+      };
+
+      const result = (client as any).shouldSkipNextSpeakerCheckForOllama(mockTurn);
+      expect(result).toBe(true);
+    });
+
+    it('should return true for responses ending with words', () => {
+      const mockTurn = {
+        getDebugResponses: vi.fn().mockReturnValue([
+          {
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: 'The capital is Paris' }],
+                },
+              },
+            ],
+          },
+        ]),
+      };
+
+      const result = (client as any).shouldSkipNextSpeakerCheckForOllama(mockTurn);
+      expect(result).toBe(true);
+    });
+
+    it('should return false for responses indicating continuation', () => {
+      const mockTurn = {
+        getDebugResponses: vi.fn().mockReturnValue([
+          {
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: 'Let me continue with' }],
+                },
+              },
+            ],
+          },
+        ]),
+      };
+
+      const result = (client as any).shouldSkipNextSpeakerCheckForOllama(mockTurn);
+      expect(result).toBe(false);
+    });
+
+    it('should return false for responses ending with questions to user', () => {
+      const mockTurn = {
+        getDebugResponses: vi.fn().mockReturnValue([
+          {
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: 'What would you like me to do?' }],
+                },
+              },
+            ],
+          },
+        ]),
+      };
+
+      const result = (client as any).shouldSkipNextSpeakerCheckForOllama(mockTurn);
+      expect(result).toBe(false);
+    });
+
+    it('should return false when no responses are available', () => {
+      const mockTurn = {
+        getDebugResponses: vi.fn().mockReturnValue([]),
+      };
+
+      const result = (client as any).shouldSkipNextSpeakerCheckForOllama(mockTurn);
+      expect(result).toBe(false);
+    });
+
+    it('should return false when response text is empty', () => {
+      const mockTurn = {
+        getDebugResponses: vi.fn().mockReturnValue([
+          {
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: '' }],
+                },
+              },
+            ],
+          },
+        ]),
+      };
+
+      const result = (client as any).shouldSkipNextSpeakerCheckForOllama(mockTurn);
+      expect(result).toBe(false);
+    });
+  });
 });
