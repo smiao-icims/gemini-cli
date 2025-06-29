@@ -119,13 +119,11 @@ export class OllamaContentGenerator implements ContentGenerator {
   async generateContentStream(
     _request: GenerateContentParameters,
   ): Promise<AsyncGenerator<GenerateContentResponse>> {
-    // For Ollama, we'll use non-streaming mode to get the complete response
-    // and then yield it as a single clean result
     const messages = this.convertToOllamaMessages(_request);
     const ollamaRequest = {
       model: this.model,
       messages,
-      stream: false, // Use non-streaming mode for cleaner output
+      stream: true, // Use streaming mode for real-time responses
     };
 
     const response = await fetch(`${this.baseUrl}/api/chat`, {
@@ -141,11 +139,7 @@ export class OllamaContentGenerator implements ContentGenerator {
       throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
     }
 
-    // Get the complete response
-    const ollamaResponse = await response.json();
-    
-    // Convert to Gemini format and yield as a single complete response
-    return this.handleNonStreamingResponse(ollamaResponse);
+    return this.handleStreamingResponse(response);
   }
 
   async countTokens(request: CountTokensParameters): Promise<CountTokensResponse> {
@@ -218,6 +212,94 @@ export class OllamaContentGenerator implements ContentGenerator {
     return '';
   }
 
+  private async *handleStreamingResponse(response: Response): AsyncGenerator<GenerateContentResponse> {
+    if (!response.body) {
+      throw new Error('Response body is null');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n').filter(line => line.trim());
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+            
+            if (data.message?.content) {
+              const deltaText = data.message.content;
+              
+              // Yield raw delta content - no filtering during streaming
+              // Filtering can be done at a higher level if needed
+              const deltaResponse: GenerateContentResponse = {
+                candidates: [
+                  {
+                    content: {
+                      parts: [{ text: deltaText }],
+                      role: 'model',
+                    },
+                    index: 0,
+                    finishReason: data.done ? FinishReason.STOP : undefined,
+                  },
+                ],
+                promptFeedback: { safetyRatings: [] },
+                text: undefined,
+                data: undefined,
+                functionCalls: undefined,
+                executableCode: undefined,
+                codeExecutionResult: undefined,
+              };
+
+              yield deltaResponse;
+            }
+
+            if (data.done) {
+              // Add usage metadata as a separate response if available
+              if (data.eval_count || data.prompt_eval_count) {
+                const metadataResponse: GenerateContentResponse = {
+                  candidates: [
+                    {
+                      content: {
+                        parts: [{ text: '' }],
+                        role: 'model',
+                      },
+                      index: 0,
+                      finishReason: FinishReason.STOP,
+                    },
+                  ],
+                  promptFeedback: { safetyRatings: [] },
+                  usageMetadata: {
+                    promptTokenCount: data.prompt_eval_count || 0,
+                    candidatesTokenCount: data.eval_count || 0,
+                    totalTokenCount: (data.prompt_eval_count || 0) + (data.eval_count || 0),
+                  },
+                  text: undefined,
+                  data: undefined,
+                  functionCalls: undefined,
+                  executableCode: undefined,
+                  codeExecutionResult: undefined,
+                };
+
+                yield metadataResponse;
+              }
+            }
+          } catch (e) {
+            // Skip malformed JSON lines
+            console.warn('Failed to parse streaming response line:', line);
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
   private async *handleNonStreamingResponse(ollamaResponse: { message?: { content?: string }; eval_count?: number; prompt_eval_count?: number }): AsyncGenerator<GenerateContentResponse> {
     let responseText = ollamaResponse.message?.content || '';
     
@@ -281,6 +363,8 @@ export class OllamaContentGenerator implements ContentGenerator {
     
     return cleaned;
   }
+
+
 
   private cleanJsonResponse(text: string): string {
     // First clean thinking tokens

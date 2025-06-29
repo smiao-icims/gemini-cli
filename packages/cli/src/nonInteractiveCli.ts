@@ -34,10 +34,28 @@ function getResponseText(response: GenerateContentResponse): string | null {
       if (thoughtPart?.thought) {
         return null;
       }
-      return candidate.content.parts
+      
+      let text = candidate.content.parts
         .filter((part) => part.text)
         .map((part) => part.text)
         .join('');
+      
+      // Filter out thinking tokens for Ollama responses
+      if (text) {
+        // Remove all thinking content - everything from <think> to </think>
+        text = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+        
+        // Remove any remaining incomplete thinking tags
+        text = text.replace(/<think[^>]*>/g, '');
+        text = text.replace(/<\/think>/g, '');
+        
+        // If after filtering only whitespace remains, return null
+        if (text.trim() === '') {
+          return null;
+        }
+      }
+      
+      return text;
     }
   }
   return null;

@@ -480,8 +480,9 @@ export class GeminiChat {
             }
             outputContent.push(content);
           }
+          yield chunk;
         }
-        yield chunk;
+        // Remove duplicate yield - only yield valid responses
       }
     } catch (error) {
       errorOccurred = true;
